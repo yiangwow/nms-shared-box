@@ -1,0 +1,5 @@
+# Copy to shared_box.toml next to shared_box.py and fill in.
+relay_url = "wss://nms.xyyoutube.com"
+token = "PASTE_THE_TOKEN_HERE"
+player = "your-name"
+box_inventory_index = 21  # 21 = corvette cargo 9 (12 = base Container 0). Both players must use the same one.

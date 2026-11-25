@@ -68,3 +68,25 @@ def test_save_load_roundtrip(tmp_path):
 def test_load_missing_file_is_empty(tmp_path):
     box = load(str(tmp_path / "nope.json"))
     assert box.slots == {} and box.rev == 0 and not box.seeded
+
+
+def test_add_only_uses_valid_slots():
+    box = Box(slots={}, valid_slots=["2,0", "0,1"])
+    result = box.adjust({"GOLD": 20}, {"GOLD": rec("GOLD", 1, max_amount=5)})
+    assert set(box.slots) == {"2,0", "0,1"} and result["overflow"] == {"GOLD": 10}
+
+
+def test_save_load_keeps_valid_slots_and_recent_commits(tmp_path):
+    path = str(tmp_path / "box.json")
+    box = Box(slots={"0,0": rec("FUEL1", 1)}, rev=3, seeded=True, valid_slots=["0,0"])
+    box.remember_commit("r1")
+    save(box, path)
+    back = load(path)
+    assert back.valid_slots == ["0,0"] and back.recent_commits == ["r1"]
+
+
+def test_remember_commit_keeps_the_last_few():
+    box = Box()
+    for i in range(40):
+        box.remember_commit(str(i))
+    assert box.recent_commits == [str(i) for i in range(8, 40)]

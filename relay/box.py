@@ -19,6 +19,32 @@ class Box:
     seeded: bool = False
     width: int = 10
     height: int = 6
+    valid_slots: list = None  # "x,y" keys a new stack may go into; None = every slot in width x height
+    recent_commits: list = field(default_factory=list)  # ids of the last commits applied, for resends
+
+    def remember_commit(self, rid, keep=32):
+        self.recent_commits.append(rid)
+        del self.recent_commits[:-keep]
+
+    def narrow_valid_slots(self, keys):
+        """Only ever shrink the set of slots new stacks may use, so every player's box can hold them.
+        Returns True if it changed."""
+        keys = sorted({k for k in keys if isinstance(k, str)})
+        if not keys:  # an empty list carries no information; never let it empty the set
+            return False
+        new = keys if self.valid_slots is None else sorted(set(self.valid_slots) & set(keys))
+        if new == self.valid_slots:
+            return False
+        self.valid_slots = new
+        return True
+
+    def replace_valid_slots(self, keys):
+        """Replace the set outright (a re-seed may widen it). An empty list is ignored. True if changed."""
+        keys = sorted({k for k in keys if isinstance(k, str)})
+        if not keys or keys == self.valid_slots:
+            return False
+        self.valid_slots = keys
+        return True
 
     def matches(self, expect):
         """True if every slot in `expect` looks the same here as on the requesting player's screen."""
@@ -66,10 +92,11 @@ class Box:
                     return 0
         if template is None:
             return amount
+        valid = None if self.valid_slots is None else set(self.valid_slots)
         for y in range(self.height):
             for x in range(self.width):
                 key = f"{x},{y}"
-                if key in self.slots:
+                if key in self.slots or (valid is not None and key not in valid):
                     continue
                 put = min(amount, template["max"])
                 self.slots[key] = dict(template, amount=put)
@@ -100,7 +127,8 @@ def save(box, path):
     fd, tmp = tempfile.mkstemp(dir=folder, suffix=".tmp")
     with os.fdopen(fd, "w") as f:
         json.dump({"rev": box.rev, "seeded": box.seeded, "width": box.width,
-                   "height": box.height, "slots": box.slots}, f)
+                   "height": box.height, "slots": box.slots, "valid_slots": box.valid_slots,
+                   "recent_commits": box.recent_commits}, f)
     os.replace(tmp, path)
 
 
@@ -110,4 +138,5 @@ def load(path):
     with open(path) as f:
         data = json.load(f)
     return Box(slots=data["slots"], rev=data["rev"], seeded=data["seeded"],
-               width=data.get("width", 10), height=data.get("height", 6))
+               width=data.get("width", 10), height=data.get("height", 6),
+               valid_slots=data.get("valid_slots"), recent_commits=list(data.get("recent_commits") or []))
